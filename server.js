@@ -1,6 +1,6 @@
 /**
- * PrekClip Server
- * Backend: Node.js + Express + JSON DB
+ * PrekClip Server (FIXED)
+ * Исправлена ошибка "Cannot GET /"
  */
 
 const express = require('express');
@@ -12,38 +12,50 @@ const bodyParser = require('body-parser');
 
 const app = express();
 const PORT = 3000;
+
+// Пути к файлам (они лежат в одной папке)
 const DB_FILE = path.join(__dirname, 'database.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const INDEX_FILE = path.join(__dirname, 'index.html');
 
 // --- НАСТРОЙКИ ---
 app.use(cors());
 app.use(bodyParser.json());
+
+// Разрешаем доступ к папке с картинками/видео
 app.use('/uploads', express.static(UPLOAD_DIR));
 
-// Создаем папку загрузок, если нет
+// !!! САМОЕ ВАЖНОЕ ИСПРАВЛЕНИЕ !!!
+// При заходе на главную страницу отдаем файл index.html
+app.get('/', (req, res) => {
+    res.sendFile(INDEX_FILE);
+});
+
+// Создаем папку загрузок, если её нет
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
-// Настройка хранилища файлов (Multer)
+// Настройка загрузчика файлов (Multer)
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOAD_DIR),
     filename: (req, file, cb) => {
+        // Генерируем уникальное имя файла
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, uniqueSuffix + path.extname(file.originalname));
     }
 });
 const upload = multer({ storage: storage });
 
-// Инициализация БД
+// Инициализация Базы Данных
 if (!fs.existsSync(DB_FILE)) {
     const initialDB = { users: [], posts: [] };
     fs.writeFileSync(DB_FILE, JSON.stringify(initialDB, null, 2));
 }
 
-// Функции работы с БД
+// Функции чтения/записи БД
 const getDB = () => JSON.parse(fs.readFileSync(DB_FILE));
 const saveDB = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 
-// --- API ROUTES ---
+// --- API ROUTES (БЭКЕНД) ---
 
 // 1. Авторизация
 app.post('/auth/register', (req, res) => {
@@ -77,7 +89,7 @@ app.post('/auth/login', (req, res) => {
     res.json({ success: true, user });
 });
 
-// 2. Посты и Лента
+// 2. Посты
 app.post('/posts/create', upload.single('file'), (req, res) => {
     const { userId, caption, type } = req.body;
     if (!req.file) return res.status(400).json({ error: 'Файл не выбран' });
@@ -86,7 +98,7 @@ app.post('/posts/create', upload.single('file'), (req, res) => {
     const newPost = {
         id: 'post_' + Date.now(),
         userId,
-        type, // 'video' | 'image'
+        type, // 'video' или 'image'
         src: '/uploads/' + req.file.filename,
         caption,
         likes: [],
@@ -101,7 +113,6 @@ app.post('/posts/create', upload.single('file'), (req, res) => {
 
 app.get('/posts/feed', (req, res) => {
     const db = getDB();
-    // Собираем ленту с данными авторов
     const feed = db.posts.map(post => {
         const author = db.users.find(u => u.id === post.userId);
         return {
@@ -148,13 +159,13 @@ app.post('/action/comment', (req, res) => {
         saveDB(db);
         res.json(comment);
     } else {
-        res.status(400).json({ error: 'Ошибка комментирования' });
+        res.status(400).json({ error: 'Ошибка' });
     }
 });
 
 app.post('/action/follow', (req, res) => {
     const { currentId, targetId } = req.body;
-    if (currentId === targetId) return res.status(400).json({ error: 'Нельзя подписаться на себя' });
+    if (currentId === targetId) return res.status(400).json({ error: 'Нельзя на себя' });
 
     const db = getDB();
     const me = db.users.find(u => u.id === currentId);
@@ -176,13 +187,13 @@ app.post('/action/follow', (req, res) => {
         saveDB(db);
         res.json({ isFollowing, followersCount: target.followers.length });
     } else {
-        res.status(404).json({ error: 'Пользователь не найден' });
+        res.status(404).json({ error: 'Ошибка' });
     }
 });
 
-// 4. Профиль и Поиск
+// 4. Поиск и Профиль
 app.get('/users/search', (req, res) => {
-    const q = req.query.q.toLowerCase();
+    const q = req.query.q ? req.query.q.toLowerCase() : '';
     const db = getDB();
     const result = db.users
         .filter(u => u.username.toLowerCase().includes(q))
@@ -193,10 +204,9 @@ app.get('/users/search', (req, res) => {
 app.get('/users/:id', (req, res) => {
     const db = getDB();
     const user = db.users.find(u => u.id === req.params.id);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ error: 'Нет такого юзера' });
 
     const userPosts = db.posts.filter(p => p.userId === user.id);
-    // Не отправляем пароль
     const { password, ...safeUser } = user;
     res.json({ user: safeUser, posts: userPosts });
 });
@@ -214,7 +224,10 @@ app.post('/users/avatar', upload.single('file'), (req, res) => {
     }
 });
 
+// ЗАПУСК
 app.listen(PORT, () => {
-    console.log(`\n🔵 PrekClip Server Active: http://localhost:${PORT}`);
-    console.log(`📂 Storage: ${UPLOAD_DIR}`);
+    console.log(`\n================================`);
+    console.log(`✅ Сервер запущен!`);
+    console.log(`🌍 Откройте в браузере: http://localhost:${PORT}`);
+    console.log(`================================\n`);
 });
