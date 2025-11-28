@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PrekClip</title>
+    <style>
+        /* --- GLOBAL & VARS --- */
+        :root {
+            --primary: #2962FF; /* Яркий синий */
+            --bg: #000000;
+            --surface: #121212;
+            --surface-light: #1E1E1E;
+            --text: #ffffff;
+            --text-secondary: #aaaaaa;
+            --border: #333333;
+            --nav-height: 60px;
+        }
+
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- ICONS (SVG) --- */
+        .icon { width: 24px; height: 24px; fill: currentColor; }
+        .icon-lg { width: 32px; height: 32px; fill: currentColor; }
+        .icon-nav { width: 22px; height: 22px; margin-bottom: 4px; fill: currentColor; }
+        
+        /* --- COMPONENTS --- */
+        button {
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.96); }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            width: 100%;
+            font-size: 16px;
+        }
+
+        .btn-small {
+            background: var(--surface-light);
+            color: var(--text);
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .btn-small.active { background: var(--primary); color: white; }
+
+        input, textarea {
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            width: 100%;
+            margin-bottom: 12px;
+            font-size: 15px;
+        }
+        input:focus, textarea:focus { border-color: var(--primary); }
+
+        /* --- VIEWS --- */
+        .view {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+            padding-bottom: var(--nav-height);
+            animation: fadeIn 0.3s ease;
+        }
+        .view.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- AUTH SCREEN --- */
+        #view-auth {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            padding: 30px;
+            background: linear-gradient(180deg, #000 0%, #0d1b3e 100%);
+            z-index: 2000;
+        }
+        .logo { font-size: 40px; font-weight: 800; color: var(--primary); margin-bottom: 10px; letter-spacing: -1px; }
+        .auth-toggle { color: var(--text-secondary); margin-top: 20px; font-size: 14px; cursor: pointer; }
+        .auth-toggle span { color: var(--primary); font-weight: bold; }
+
+        /* --- NAVBAR --- */
+        .navbar {
+            position: fixed;
+            bottom: 0; width: 100%; height: var(--nav-height);
+            background: rgba(18, 18, 18, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 1000;
+        }
+        .nav-item {
+            display: flex; flex-direction: column; align-items: center;
+            color: #666; font-size: 10px; cursor: pointer; width: 20%;
+        }
+        .nav-item.active { color: white; }
+        .nav-add {
+            width: 45px; height: 30px;
+            background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+            border-radius: 8px;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .nav-add svg { fill: #000; width: 20px; height: 20px; }
+
+        /* --- FEED POST --- */
+        .post {
+            position: relative;
+            background: #000;
+            border-bottom: 1px solid var(--surface-light);
+            margin-bottom: 10px;
+        }
+        .post-header {
+            padding: 10px 15px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .avatar-circle {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: #333; object-fit: cover;
+        }
+        .username { font-weight: 700; font-size: 14px; }
+        
+        .post-media-container {
+            width: 100%;
+            background: #101010;
+            display: flex; justify-content: center; align-items: center;
+            min-height: 300px;
+        }
+        .post-media { width: 100%; max-height: 70vh; object-fit: contain; }
+
+        .post-actions-bar {
+            padding: 10px 15px;
+            display: flex; justify-content: space-between;
+        }
+        .action-group { display: flex; gap: 20px; }
+        .action-btn { background: none; padding: 0; display: flex; align-items: center; gap: 6px; color: white; }
+        .action-btn span { font-size: 14px; font-weight: 600; }
+        
+        .liked svg { fill: #ff1744; animation: heartBeat 0.3s; }
+        @keyframes heartBeat { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+
+        .post-caption { padding: 0 15px 15px; font-size: 14px; color: #ddd; line-height: 1.4; }
+        .post-caption b { color: white; margin-right: 5px; }
+
+        /* --- COMMENTS --- */
+        .comments-sheet {
+            display: none;
+            background: var(--surface);
+            padding: 15px;
+            border-top: 1px solid var(--border);
+        }
+        .comment-item { margin-bottom: 10px; font-size: 13px; display: flex; gap: 10px; }
+
+        /* --- PROFILE --- */
+        .profile-header { padding: 30px 20px; text-align: center; border-bottom: 1px solid var(--border); }
+        .profile-avatar { width: 90px; height: 90px; border-radius: 50%; margin-bottom: 15px; border: 2px solid var(--primary); object-fit: cover; }
+        .stats-row { display: flex; justify-content: center; gap: 30px; margin: 20px 0; }
+        .stat-box { text-align: center; }
+        .stat-num { display: block; font-weight: 700; font-size: 18px; }
+        .stat-label { font-size: 12px; color: var(--text-secondary); }
+        
+        .grid-posts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-top: 1px; }
+        .grid-item { aspect-ratio: 1; background: #222; position: relative; cursor: pointer; }
+        .grid-item img, .grid-item video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* --- SEARCH & INBOX --- */
+        .search-container { padding: 15px; }
+        .user-list-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .inbox-msg { padding: 20px; text-align: center; color: var(--text-secondary); font-style: italic; }
+
+        /* --- UPLOAD --- */
+        .upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            height: 200px;
+            display: flex; justify-content: center; align-items: center;
+            margin-bottom: 20px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .upload-preview { width: 100%; height: 100%; object-fit: contain; display: none; }
+
+        /* UTILS */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <svg style="display:none">
+        <symbol id="icon-home" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></symbol>
+        <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></symbol>
+        <symbol id="icon-mail" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></symbol>
+        <symbol id="icon-user" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
+        <symbol id="icon-heart" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></symbol>
+        <symbol id="icon-comment" viewBox="0 0 24 24"><path d="M21.99 4c0-1.1-.89-2-1.99-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4-.01-18z"/></symbol>
+        <symbol id="icon-share" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></symbol>
+    </svg>
+
+    <div id="view-auth" class="view active" style="position: absolute; top:0; left:0; width:100%; z-index:9000;">
+        <div class="logo">PrekClip</div>
+        
+        <div id="form-login" style="width: 100%; max-width: 320px;">
+            <input type="text" id="login-u" placeholder="Имя пользователя">
+            <input type="password" id="login-p" placeholder="Пароль">
+            <button class="btn-primary" onclick="app.login()">Войти</button>
+            <div class="auth-toggle" onclick="app.toggleAuth(true)">Нет аккаунта? <span>Создать</span></div>
+        </div>
+
+        <div id="form-register" class="hidden" style="width: 100%; max-width: 320px;">
+            <input type="text" id="reg-u" placeholder="Придумайте ник">
+            <input type="password" id="reg-p" placeholder="Придумайте пароль">
+            <button class="btn-primary" onclick="app.register()">Зарегистрироваться</button>
+            <div class="auth-toggle" onclick="app.toggleAuth(false)">Уже есть? <span>Войти</span></div>
+        </div>
+    </div>
+
+    <div id="view-home" class="view"></div>
+
+    <div id="view-search" class="view">
+        <div class="search-container">
+            <input type="text" placeholder="Поиск людей..." oninput="app.search(this.value)">
+            <div id="search-results"></div>
+        </div>
+    </div>
+
+    <div id="view-upload" class="view">
+        <div style="padding: 20px;">
+            <h2>Создать публикацию</h2>
+            <div class="upload-area" onclick="document.getElementById('file-inp').click()">
+                <span id="upload-txt">Нажмите, чтобы выбрать файл</span>
+                <img id="upload-prev" class="upload-preview">
+                <video id="upload-vid" class="upload-preview" controls></video>
+            </div>
+            <input type="file" id="file-inp" class="hidden" accept="image/*,video/*" onchange="app.previewFile(this)">
+            <textarea id="upload-cap" placeholder="Добавьте описание..."></textarea>
+            <button class="btn-primary" onclick="app.uploadPost()">Опубликовать</button>
+        </div>
+    </div>
+
+    <div id="view-inbox" class="view">
+        <h2 style="padding: 15px 20px; border-bottom: 1px solid var(--border); margin:0;">Входящие</h2>
+        <div class="inbox-msg">Нет новых уведомлений</div>
+    </div>
+
+    <div id="view-profile" class="view">
+        <div id="profile-cont"></div>
+    </div>
+
+    <nav class="navbar hidden" id="main-nav">
+        <div class="nav-item active" onclick="app.nav('view-home')">
+            <svg class="icon-nav"><use href="#icon-home"/></svg>
+            <span>Главная</span>
+        </div>
+        <div class="nav-item" onclick="app.nav('view-search')">
+            <svg class="icon-nav"><use href="#icon-search"/></svg>
+            <span>Поиск</span>
+        </div>
+        <div class="nav-item" onclick="app.nav('view-upload')">
+            <div class="nav-add"><svg><use href="#icon-plus"/></svg></div>
+        </div>
+        <div class="nav-item" onclick="app.nav('view-inbox')">
+            <svg class="icon-nav"><use href="#icon-mail"/></svg>
+            <span>Входящие</span>
+        </div>
+        <div class="nav-item" onclick="app.nav('view-profile')">
+            <svg class="icon-nav"><use href="#icon-user"/></svg>
+            <span>Профиль</span>
+        </div>
+    </nav>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        
+        const app = {
+            user: null,
+
+            // --- AUTH ---
+            toggleAuth: (toRegister) => {
+                document.getElementById('form-login').classList.toggle('hidden', toRegister);
+                document.getElementById('form-register').classList.toggle('hidden', !toRegister);
+            },
+
+            async register() {
+                const u = document.getElementById('reg-u').value;
+                const p = document.getElementById('reg-p').value;
+                if(!u || !p) return alert('Заполните поля');
+                
+                try {
+                    const res = await fetch(`${API_URL}/auth/register`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ username: u, password: p })
+                    });
+                    const data = await res.json();
+                    if(data.error) alert(data.error);
+                    else { alert('Аккаунт создан!'); this.toggleAuth(false); }
+                } catch(e) { alert('Ошибка сети'); }
+            },
+
+            async login() {
+                const u = document.getElementById('login-u').value;
+                const p = document.getElementById('login-p').value;
+                
+                try {
+                    const res = await fetch(`${API_URL}/auth/login`, {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ username: u, password: p })
+                    });
+                    const data = await res.json();
+                    if(data.error) alert(data.error);
+                    else {
+                        this.user = data.user;
+                        document.getElementById('view-auth').classList.remove('active');
+                        document.getElementById('main-nav').classList.remove('hidden');
+                        this.nav('view-home');
+                    }
+                } catch(e) { alert('Ошибка сети'); }
+            },
+
+            // --- NAV ---
+            nav(viewId) {
+                document.querySelectorAll('.view:not(#view-auth)').forEach(v => v.classList.remove('active'));
+                document.getElementById(viewId).classList.add('active');
+                
+                // Highlight Menu
+                const icons = ['view-home', 'view-search', 'view-upload', 'view-inbox', 'view-profile'];
+                const items = document.querySelectorAll('.nav-item');
+                items.forEach(el => el.classList.remove('active'));
+                if(viewId !== 'view-upload') items[icons.indexOf(viewId)].classList.add('active');
+
+                if(viewId === 'view-home') this.loadFeed();
+                if(viewId === 'view-profile') this.loadProfile(this.user.id);
+            },
+
+            // --- FEED ---
+            async loadFeed() {
+                const cont = document.getElementById('view-home');
+                cont.innerHTML = '<div style="padding:20px;text-align:center;color:#666">Загрузка ленты...</div>';
+                
+                const res = await fetch(`${API_URL}/posts/feed`);
+                const posts = await res.json();
+                
+                cont.innerHTML = '';
+                posts.forEach(post => {
+                    const isLiked = post.likes.includes(this.user.id);
+                    const mediaHtml = post.type === 'video'
+                        ? `<video src="${API_URL}${post.src}" class="post-media" controls loop playsinline></video>`
+                        : `<img src="${API_URL}${post.src}" class="post-media">`;
+
+                    const html = `
+                        <div class="post">
+                            <div class="post-header" onclick="app.loadProfile('${post.userId}'); app.nav('view-profile')">
+                                <img src="${post.authorAvatar ? API_URL+post.authorAvatar : 'https://via.placeholder.com/40/333/333'}" class="avatar-circle">
+                                <span class="username">${post.authorName}</span>
+                            </div>
+                            <div class="post-media-container">${mediaHtml}</div>
+                            <div class="post-actions-bar">
+                                <div class="action-group">
+                                    <button class="action-btn ${isLiked ? 'liked' : ''}" onclick="app.toggleLike('${post.id}', this)">
+                                        <svg class="icon-lg"><use href="#icon-heart"/></svg>
+                                        <span>${post.likes.length}</span>
+                                    </button>
+                                    <button class="action-btn" onclick="app.toggleComments('${post.id}')">
+                                        <svg class="icon-lg"><use href="#icon-comment"/></svg>
+                                        <span>${post.comments.length}</span>
+                                    </button>
+                                </div>
+                                <button class="action-btn" onclick="app.sharePost('${post.id}')">
+                                    <svg class="icon-lg"><use href="#icon-share"/></svg>
+                                </button>
+                            </div>
+                            <div class="post-caption"><b>${post.authorName}</b> ${post.caption}</div>
+                            <div id="comments-${post.id}" class="comments-sheet">
+                                <div class="list">
+                                    ${post.comments.map(c => `<div class="comment-item"><b>${c.username}:</b> ${c.text}</div>`).join('')}
+                                </div>
+                                <input type="text" placeholder="Комментировать..." onkeydown="if(event.key==='Enter') app.sendComment('${post.id}', this)">
+                            </div>
+                        </div>
+                    `;
+                    cont.innerHTML += html;
+                });
+            },
+
+            async toggleLike(pid, btn) {
+                const res = await fetch(`${API_URL}/action/like`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ postId: pid, userId: this.user.id })
+                });
+                const data = await res.json();
+                btn.classList.toggle('liked', data.isLiked);
+                btn.querySelector('span').innerText = data.likesCount;
+            },
+
+            toggleComments(pid) {
+                const el = document.getElementById(`comments-${pid}`);
+                el.style.display = el.style.display === 'block' ? 'none' : 'block';
+            },
+
+            async sendComment(pid, input) {
+                if(!input.value.trim()) return;
+                const res = await fetch(`${API_URL}/action/comment`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ postId: pid, userId: this.user.id, text: input.value })
+                });
+                const c = await res.json();
+                
+                const list = input.previousElementSibling;
+                list.innerHTML += `<div class="comment-item"><b>${c.username}:</b> ${c.text}</div>`;
+                input.value = '';
+            },
+
+            sharePost(pid) {
+                const link = `${window.location.origin}/#post-${pid}`;
+                navigator.clipboard.writeText(link);
+                alert('Ссылка скопирована!');
+            },
+
+            // --- UPLOAD ---
+            previewFile(input) {
+                const file = input.files[0];
+                if(!file) return;
+                
+                const txt = document.getElementById('upload-txt');
+                const img = document.getElementById('upload-prev');
+                const vid = document.getElementById('upload-vid');
+                
+                txt.style.display = 'none';
+                img.style.display = 'none';
+                vid.style.display = 'none';
+                img.src = ''; vid.src = '';
+
+                if(file.type.startsWith('video')) {
+                    vid.src = URL.createObjectURL(file);
+                    vid.style.display = 'block';
+                } else {
+                    img.src = URL.createObjectURL(file);
+                    img.style.display = 'block';
+                }
+            },
+
+            async uploadPost() {
+                const inp = document.getElementById('file-inp');
+                const cap = document.getElementById('upload-cap');
+                
+                if(!inp.files[0]) return alert('Выберите файл');
+                
+                const form = new FormData();
+                form.append('file', inp.files[0]);
+                form.append('userId', this.user.id);
+                form.append('caption', cap.value);
+                form.append('type', inp.files[0].type.startsWith('video') ? 'video' : 'image');
+
+                await fetch(`${API_URL}/posts/create`, { method: 'POST', body: form });
+                
+                alert('Опубликовано!');
+                inp.value = ''; cap.value = '';
+                document.getElementById('upload-txt').style.display = 'block';
+                document.getElementById('upload-prev').style.display = 'none';
+                document.getElementById('upload-vid').style.display = 'none';
+                this.nav('view-home');
+            },
+
+            // --- PROFILE & SEARCH ---
+            async loadProfile(uid) {
+                const cont = document.getElementById('profile-cont');
+                cont.innerHTML = '<div style="padding:20px;text-align:center">Загрузка...</div>';
+                
+                const res = await fetch(`${API_URL}/users/${uid}`);
+                if(!res.ok) return cont.innerHTML = 'Ошибка';
+                const { user, posts } = await res.json();
+                
+                const isMe = this.user.id === user.id;
+                const isFollow = this.user.following.includes(user.id);
+
+                cont.innerHTML = `
+                    <div class="profile-header">
+                        <img src="${user.avatar ? API_URL+user.avatar : 'https://via.placeholder.com/90/333/333'}" class="profile-avatar">
+                        <h2 style="margin:0">@${user.username}</h2>
+                        
+                        <div class="stats-row">
+                            <div class="stat-box"><span class="stat-num">${user.following.length}</span><span class="stat-label">Подписки</span></div>
+                            <div class="stat-box"><span class="stat-num" id="p-followers">${user.followers.length}</span><span class="stat-label">Фанаты</span></div>
+                            <div class="stat-box"><span class="stat-num">${posts.length}</span><span class="stat-label">Посты</span></div>
+                        </div>
+
+                        ${isMe 
+                            ? `<button class="btn-small" onclick="document.getElementById('ava-up').click()">Изменить фото</button>
+                               <input type="file" id="ava-up" class="hidden" onchange="app.uploadAvatar(this)">` 
+                            : `<button class="btn-primary" onclick="app.followUser('${user.id}', this)" style="background:${isFollow?'#333':''}">
+                                ${isFollow ? 'Вы подписаны' : 'Подписаться'}
+                               </button>`
+                        }
+                    </div>
+                    <div class="grid-posts">
+                        ${posts.map(p => `
+                            <div class="grid-item">
+                                ${p.type==='video' ? '<video src="'+API_URL+p.src+'"></video>' : '<img src="'+API_URL+p.src+'">'}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            },
+
+            async uploadAvatar(inp) {
+                const form = new FormData();
+                form.append('file', inp.files[0]);
+                form.append('userId', this.user.id);
+                await fetch(`${API_URL}/users/avatar`, { method: 'POST', body: form });
+                this.loadProfile(this.user.id);
+            },
+
+            async followUser(tid, btn) {
+                const res = await fetch(`${API_URL}/action/follow`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ currentId: this.user.id, targetId: tid })
+                });
+                const data = await res.json();
+                if(data.error) return alert(data.error);
+
+                // Обновляем локальное состояние
+                if(data.isFollowing) this.user.following.push(tid);
+                else this.user.following = this.user.following.filter(id => id !== tid);
+
+                btn.innerText = data.isFollowing ? 'Вы подписаны' : 'Подписаться';
+                btn.style.background = data.isFollowing ? '#333' : 'var(--primary)';
+                document.getElementById('p-followers').innerText = data.followersCount;
+            },
+
+            async search(q) {
+                if(!q) return document.getElementById('search-results').innerHTML = '';
+                const res = await fetch(`${API_URL}/users/search?q=${q}`);
+                const list = await res.json();
+                
+                document.getElementById('search-results').innerHTML = list.map(u => `
+                    <div class="user-list-item" onclick="app.loadProfile('${u.id}'); app.nav('view-profile')">
+                        <img src="${u.avatar ? API_URL+u.avatar : 'https://via.placeholder.com/40'}" class="avatar-circle">
+                        <span>${u.username}</span>
+                    </div>
+                `).join('');
+            }
+        };
+    </script>
+</body>
+</html>
