@@ -1,5 +1,5 @@
 /**
- * PrekClip Server (Единый деплой)
+ * PrekClip Server (Единый деплой, Render Ready)
  * Бэкенд и статический клиент запускаются из одного процесса.
  */
 
@@ -11,19 +11,29 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 const app = express();
-// Используем порт, назначенный окружением (например, Render) или 3000 локально
 const PORT = process.env.PORT || 3000; 
 const DB_FILE = path.join(__dirname, 'database.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 
 // --- НАСТРОЙКИ CORS И MIDDLEWARE ---
-// Разрешаем CORS (может понадобиться, если клиент на другом домене)
 app.use(cors()); 
 app.use(bodyParser.json());
 
 // 1. Статическая раздача загруженных файлов (Медиа)
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 app.use('/uploads', express.static(UPLOAD_DIR)); 
+
+// --- НАСТРОЙКА ХРАНИЛИЩА ФАЙЛОВ (MULTER) ---
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+// 🔥 ИСПРАВЛЕНИЕ: ИНИЦИАЛИЗАЦИЯ MULTER
+const upload = multer({ storage: storage }); 
 
 // --- ФУНКЦИИ РАБОТЫ С БД ---
 const getDB = () => JSON.parse(fs.readFileSync(DB_FILE));
@@ -59,8 +69,9 @@ const initializeDB = () => {
 };
 initializeDB(); 
 
-// 3. API ROUTES (Без изменений)
-// ... (Все маршруты /auth/register, /posts/feed, /action/like и т.д. остаются здесь)
+// --- API ROUTES ---
+
+// 1. Авторизация
 app.post('/auth/register', (req, res) => {
     const { username, password } = req.body;
     const db = getDB();
@@ -93,6 +104,8 @@ app.post('/auth/login', (req, res) => {
     res.json({ success: true, user });
 });
 
+// 2. Посты и Лента
+// 🔥 ИСПРАВЛЕНИЕ: Здесь теперь доступен 'upload'
 app.post('/posts/create', upload.single('file'), (req, res) => {
     const { userId, caption, type } = req.body;
     if (!req.file) return res.status(400).json({ error: 'Файл не выбран' });
@@ -128,7 +141,7 @@ app.get('/posts/feed', (req, res) => {
     res.json(feed);
 });
 
-// Действия (Лайк, Коммент, Подписка)
+// 3. Действия (Лайк, Коммент, Подписка)
 app.post('/action/like', (req, res) => {
     const { postId, userId } = req.body;
     const db = getDB();
@@ -196,7 +209,7 @@ app.post('/action/follow', (req, res) => {
     }
 });
 
-// Профиль и Поиск
+// 4. Профиль и Поиск
 app.get('/users/search', (req, res) => {
     const q = req.query.q.toLowerCase();
     const db = getDB();
@@ -229,8 +242,7 @@ app.post('/users/avatar', upload.single('file'), (req, res) => {
     }
 });
 
-// 2. Статическая раздача клиента (HTML)
-// Обслуживаем index.html по корневому пути
+// 5. Статическая раздача клиента (HTML)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
