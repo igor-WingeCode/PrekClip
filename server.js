@@ -1,6 +1,6 @@
 /**
  * PrekClip Server (Единый деплой, Render Ready)
- * Бэкенд и статический клиент запускаются из одного процесса.
+ * Backend: Node.js + Express + JSON DB
  */
 
 const express = require('express');
@@ -32,22 +32,20 @@ const storage = multer.diskStorage({
     }
 });
 
-// 🔥 ИСПРАВЛЕНИЕ: ИНИЦИАЛИЗАЦИЯ MULTER
-const upload = multer({ storage: storage }); 
+const upload = multer({ storage: storage }); // 🔥 Инициализация multer
 
 // --- ФУНКЦИИ РАБОТЫ С БД ---
-const getDB = () => JSON.parse(fs.readFileSync(DB_FILE));
+const getDB = () => {
+    if (!fs.existsSync(DB_FILE)) {
+        return { users: [], posts: [] };
+    }
+    return JSON.parse(fs.readFileSync(DB_FILE));
+};
 const saveDB = (data) => fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 
 // --- ИНИЦИАЛИЗАЦИЯ (Включая официальный аккаунт) ---
 const initializeDB = () => {
-    let db;
-    if (!fs.existsSync(DB_FILE)) {
-        db = { users: [], posts: [] };
-    } else {
-        db = getDB();
-    }
-
+    const db = getDB();
     const officialUsername = 'PrekCompany';
     const officialPassword = 'PrekCompanyCOPYRIGHT777';
     
@@ -62,10 +60,9 @@ const initializeDB = () => {
             isVerified: true 
         };
         db.users.push(officialUser);
+        saveDB(db); // Сохраняем сразу после создания
         console.log(`✅ Официальный аккаунт "${officialUsername}" создан.`);
     }
-
-    saveDB(db);
 };
 initializeDB(); 
 
@@ -98,14 +95,17 @@ app.post('/auth/register', (req, res) => {
 app.post('/auth/login', (req, res) => {
     const { username, password } = req.body;
     const db = getDB();
+    // Ищем точное совпадение по имени и паролю
     const user = db.users.find(u => u.username === username && u.password === password);
     
-    if (!user) return res.status(401).json({ error: 'Неверные данные' });
-    res.json({ success: true, user });
+    if (!user) return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
+    
+    // Возвращаем данные пользователя, кроме пароля
+    const { password: userPassword, ...safeUser } = user;
+    res.json({ success: true, user: safeUser });
 });
 
 // 2. Посты и Лента
-// 🔥 ИСПРАВЛЕНИЕ: Здесь теперь доступен 'upload'
 app.post('/posts/create', upload.single('file'), (req, res) => {
     const { userId, caption, type } = req.body;
     if (!req.file) return res.status(400).json({ error: 'Файл не выбран' });
