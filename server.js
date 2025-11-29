@@ -1,6 +1,6 @@
 /**
- * PrekClip Server (Production Ready)
- * Backend: Node.js + Express + JSON DB
+ * PrekClip Server (Единый деплой)
+ * Бэкенд и статический клиент запускаются из одного процесса.
  */
 
 const express = require('express');
@@ -11,28 +11,19 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Используем порт Render/Environment
+// Используем порт, назначенный окружением (например, Render) или 3000 локально
+const PORT = process.env.PORT || 3000; 
 const DB_FILE = path.join(__dirname, 'database.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
 
 // --- НАСТРОЙКИ CORS И MIDDLEWARE ---
-// Разрешаем все домены для удобства развертывания
+// Разрешаем CORS (может понадобиться, если клиент на другом домене)
 app.use(cors()); 
 app.use(bodyParser.json());
-// Статическая раздача загруженных файлов
-app.use('/uploads', express.static(UPLOAD_DIR)); 
 
+// 1. Статическая раздача загруженных файлов (Медиа)
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
-
-// Настройка хранилища файлов (Multer)
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
-const upload = multer({ storage: storage });
+app.use('/uploads', express.static(UPLOAD_DIR)); 
 
 // --- ФУНКЦИИ РАБОТЫ С БД ---
 const getDB = () => JSON.parse(fs.readFileSync(DB_FILE));
@@ -50,16 +41,15 @@ const initializeDB = () => {
     const officialUsername = 'PrekCompany';
     const officialPassword = 'PrekCompanyCOPYRIGHT777';
     
-    // Проверка наличия официального аккаунта
     if (!db.users.find(u => u.username === officialUsername)) {
         const officialUser = {
             id: 'official_1',
             username: officialUsername,
             password: officialPassword,
-            avatar: null, // Добавьте сюда путь к лого, если загрузите
+            avatar: null,
             followers: [],
             following: [],
-            isVerified: true // 🔥 Галочка верификации
+            isVerified: true 
         };
         db.users.push(officialUser);
         console.log(`✅ Официальный аккаунт "${officialUsername}" создан.`);
@@ -67,12 +57,10 @@ const initializeDB = () => {
 
     saveDB(db);
 };
+initializeDB(); 
 
-initializeDB(); // Запуск инициализации при старте сервера
-
-// --- API ROUTES (из предыдущего примера) ---
-
-// 1. Авторизация
+// 3. API ROUTES (Без изменений)
+// ... (Все маршруты /auth/register, /posts/feed, /action/like и т.д. остаются здесь)
 app.post('/auth/register', (req, res) => {
     const { username, password } = req.body;
     const db = getDB();
@@ -88,7 +76,7 @@ app.post('/auth/register', (req, res) => {
         avatar: null,
         followers: [],
         following: [],
-        isVerified: false // Обычный аккаунт без галочки
+        isVerified: false 
     };
 
     db.users.push(newUser);
@@ -105,7 +93,6 @@ app.post('/auth/login', (req, res) => {
     res.json({ success: true, user });
 });
 
-// 2. Посты и Лента
 app.post('/posts/create', upload.single('file'), (req, res) => {
     const { userId, caption, type } = req.body;
     if (!req.file) return res.status(400).json({ error: 'Файл не выбран' });
@@ -114,7 +101,7 @@ app.post('/posts/create', upload.single('file'), (req, res) => {
     const newPost = {
         id: 'post_' + Date.now(),
         userId,
-        type, // 'video' | 'image'
+        type, 
         src: '/uploads/' + req.file.filename,
         caption,
         likes: [],
@@ -135,13 +122,13 @@ app.get('/posts/feed', (req, res) => {
             ...post,
             authorName: author ? author.username : 'Unknown',
             authorAvatar: author ? author.avatar : null,
-            authorVerified: author ? author.isVerified : false // Передаем статус верификации
+            authorVerified: author ? author.isVerified : false 
         };
     });
     res.json(feed);
 });
 
-// 3. Действия (Лайк, Коммент, Подписка) - (Код из прошлого ответа, без изменений)
+// Действия (Лайк, Коммент, Подписка)
 app.post('/action/like', (req, res) => {
     const { postId, userId } = req.body;
     const db = getDB();
@@ -171,7 +158,7 @@ app.post('/action/comment', (req, res) => {
             avatar: user.avatar,
             text,
             timestamp: Date.now(),
-            isVerified: user.isVerified // Статус верификации для комментария
+            isVerified: user.isVerified 
         };
         post.comments.push(comment);
         saveDB(db);
@@ -209,7 +196,7 @@ app.post('/action/follow', (req, res) => {
     }
 });
 
-// 4. Профиль и Поиск - (Добавлена передача isVerified)
+// Профиль и Поиск
 app.get('/users/search', (req, res) => {
     const q = req.query.q.toLowerCase();
     const db = getDB();
@@ -225,7 +212,6 @@ app.get('/users/:id', (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const userPosts = db.posts.filter(p => p.userId === user.id);
-    // Не отправляем пароль
     const { password, ...safeUser } = user;
     res.json({ user: safeUser, posts: userPosts });
 });
@@ -243,11 +229,13 @@ app.post('/users/avatar', upload.single('file'), (req, res) => {
     }
 });
 
+// 2. Статическая раздача клиента (HTML)
+// Обслуживаем index.html по корневому пути
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
 app.listen(PORT, () => {
-    console.log(`\n🔵 PrekClip Server Active on port: ${PORT}`);
-    if (process.env.API_BASE_URL) {
-        console.log(`🌐 Production URL: ${process.env.API_BASE_URL}`);
-    } else {
-        console.log(`💻 Local URL: http://localhost:${PORT}`);
-    }
+    console.log(`\n🚀 PrekClip Server Active on port: ${PORT}`);
+    console.log(`📂 Клиент доступен по адресу /`);
 });
